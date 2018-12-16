@@ -1,0 +1,65 @@
+
+### Let's visualise a RandomForest
+
+library(randomForest)
+library(tidyverse)
+library(plotly)
+library(reshape2)
+
+### Get our data
+
+data <- datasets::rock ### More info: https://stat.ethz.ch/R-manual/R-devel/library/datasets/html/rock.html
+
+data_mod <- data
+
+### Create a few handy functions for setting our axes and getting the surface plot
+
+get_axis <- function(x, points = 100) {
+  min <- min(x)
+  max <- max(x)
+  axis <- seq(min, max, by = (max - min) / points)
+}
+
+create_surface_rf <- function(axis_x, axis_y, x , y, model){
+  surface <- expand.grid(x = axis_x, y = axis_y,KEEP.OUT.ATTRS = F)
+  names(surface) <- c(deparse(substitute(x)), deparse(substitute(y)))
+  surface$perm <- predict(model, newdata = surface)
+  var_names <- noquote(names(surface))
+  var1 <- var_names[1]
+  var2 <- var_names[2]
+  formula <- as.formula(paste(var2, var1, sep = "~"))
+  surface <- acast(surface, formula, value.var = "perm")
+  surface
+}
+
+### Build our model. We are deliberately looking for overfitting so minimum nodesize is set to one
+
+rf <- randomForest(perm ~ shape + peri, data = data_mod, max_depth = 100, nodesize = 1, replace = TRUE)
+
+### Let's visualise the model
+
+data_mod$residuals <- abs(predict(rf, newdata = data_mod) - data_mod$perm)
+
+axis4_x <- get_axis(data_mod$shape)
+
+axis4_y <- get_axis(data$peri)
+
+lm4_surface <- create_surface_rf(axis4_x, axis4_y, shape, peri, rf)
+
+### Bring it all together
+
+plot4 <- plot_ly(data_mod,  
+                 x = ~shape, 
+                 y = ~peri, 
+                 z = ~perm,
+                 mode = "markers",
+                 marker = list(color = ~residuals, colorscale = c('#ADD8E6', '#FF0000'), showscale = FALSE),
+                 type = "scatter3d")
+
+plot4 <- add_trace(p = plot4, z = lm4_surface,
+                   x = axis4_x,
+                   y = axis4_y,
+                   type = "surface") %>%
+  layout(title = "3D Scatterplot with Random Forest Regression Hyperplane")
+
+plot4
